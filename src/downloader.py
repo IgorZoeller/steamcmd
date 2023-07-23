@@ -38,12 +38,13 @@ async def main():
     for k_code,v_dst in consumers[0].item_map.items():
         item_folder = os.path.join(constants.SOURCE_FOLDER, k_code)
         try:
-            shutil.rmtree(os.path.join(v_dst, k_code))
+            if os.path.exists(v_dst):
+                shutil.rmtree(os.path.join(v_dst, k_code))
             print(f"# Moving {item_folder} ==> {shutil.move(item_folder, v_dst)}")
         except:
-            print(f'! Failed to move {item_folder}')
+            print(f'! Failed to move {item_folder}\n    ==> {v_dst}')
     end = time.monotonic()
-    print(f"Computation finished. Program took {end - start} to run.")
+    print(f"Computation finished. Program took {end - start} seconds ({int((end - start)/60)} minutes) to run.")
             
 
 asyncio.run(main())
