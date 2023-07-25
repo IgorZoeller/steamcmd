@@ -1,7 +1,6 @@
 import asyncio
 import os
 import sys
-import numpy as np
 from subprocess import PIPE
 import util.constants as constants
 
@@ -21,7 +20,7 @@ class Consumer:
 
     def toggle_download_method(self):
         previous = self.download_method.__name__
-        self.download_method = self.download_task if self.download_method == self.download_item else self.download_item
+        self.download_method = self.download_multiple if self.download_method == self.download_item else self.download_item
         current = self.download_method.__name__
         print(f'[{self.id.upper()}] - Changing download method from {previous} to {current}.')
 
@@ -59,7 +58,7 @@ class Consumer:
             self.remove_item(item)
             return -1
         await asyncio.sleep(10 * retry)
-        print(f"[{self.id.upper()}] > Downloading item {item.item['id']} | Retry? {retry > 0}")
+        print(f"[{self.id.upper()}] - Downloading item {item.item['id']} | Retry? {retry > 0}")
         process = await asyncio.create_subprocess_shell(
             f".\steamcmd\steamcmd.exe +login {constants.USERNAME} {constants.PASSWORD} +workshop_download_item 255710 {item.item['id']} +quit",
             stdin=PIPE, stdout=_stdout
@@ -70,7 +69,7 @@ class Consumer:
         return 0
     
 
-    async def download_task(self, item, retry = 0):
+    async def download_multiple(self, item, retry = 0):
         item_list = [item]
         self.set_item_destination(item)
         qsize = self.queue.qsize()
@@ -79,7 +78,7 @@ class Consumer:
             print(f"[{self.id.upper()}] - Consuming one more item. Remaining: {self.queue.qsize()}")
             self.queue.task_done()
         cmd = ' '.join([f'+workshop_download_item 255710 {it.item["id"]}' for it in item_list])
-        print(f"[{self.id.upper()}] > Downloading {len(item_list)} items. | Retry? {retry > 0}")
+        print(f"[{self.id.upper()}] - Downloading {len(item_list)} items. | Retry? {retry > 0}")
         process = await asyncio.create_subprocess_shell(
             f".\steamcmd\steamcmd.exe +login {constants.USERNAME} {constants.PASSWORD} {cmd} +quit",
             stdin=PIPE, stdout=PIPE

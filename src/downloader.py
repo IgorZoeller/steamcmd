@@ -1,5 +1,3 @@
-from subprocess import PIPE
-from collector import Downloadable
 from consumer import Consumer
 import util.constants as constants
 import collector
@@ -20,11 +18,11 @@ async def gather(producer):
 
 
 async def main():
-    start = time.monotonic()
-    consumers = [Consumer(queue, f'consumer_0{i}') for i in range(NUMBER_OF_CONSUMERS)]
     producer = asyncio.create_task(asyncio.to_thread(collector.collect, sys.argv[1], queue))
+    consumers = [Consumer(queue, f'consumer_0{i}') for i in range(NUMBER_OF_CONSUMERS)]
+    
     task_consume = [asyncio.create_task(c.consume()) for c in consumers]
-
+    start = time.monotonic()
     await asyncio.ensure_future(gather(producer))
     print(f'All {producer.result()} queued for download.')
     for c in consumers:
