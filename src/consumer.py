@@ -1,6 +1,6 @@
 import asyncio
-import os
-import sys
+from io import TextIOWrapper
+from collector import Downloadable
 from subprocess import PIPE
 import util.constants as constants
 
@@ -32,7 +32,7 @@ class Consumer:
         return item
     
 
-    def remove_item(self, item):
+    def remove_item_destination(self, item):
         del self.item_map[item.item['id']]
 
 
@@ -44,44 +44,38 @@ class Consumer:
             self.queue.task_done()
             self.task_count += 1
 
+    async def reinsert_failed_items(self, stdout):
+        for line in TextIOWrapper(stdout, encoding="utf-8"):
+            if "failed" in line.lower(): # ERROR! Download item {itemId} failed (Failure).
+                line = line.rstrip("\n").split(" ")
+                await self.queue.put(Downloadable(0, {"id" : line[-3], "category" : "undefined", "retry" : True}))
 
-    async def download_item(self, item, retry = 0):
+    async def download_item(self, item):
         print(f"[{self.id.upper()}] - Consuming one more item. Remaining: {self.queue.qsize()}")
-        _stdout = PIPE
-        if retry == 0:
-            self.set_item_destination(item)
-        elif retry == self.max_retry:
-            _stdout = sys.stdout
-        elif retry > self.max_retry:
-            self.fail_count += 1
-            self.task_count -= 1
-            self.remove_item(item)
-            return -1
-        await asyncio.sleep(10 * retry)
-        print(f"[{self.id.upper()}] - Downloading item {item.item['id']} | Retry? {retry > 0}")
+        self.set_item_destination(item)
+        print(f"[{self.id.upper()}] - Downloading item {item.item['id']} | Retry? {item.item['retry'] is not None}")
         process = await asyncio.create_subprocess_shell(
             f".\steamcmd\steamcmd.exe +login {constants.USERNAME} {constants.PASSWORD} +workshop_download_item 255710 {item.item['id']} +quit",
-            stdin=PIPE, stdout=_stdout
+            stdin=PIPE, stdout=PIPE
         )
         await process.wait()
-        if (len([n for n in os.listdir(constants.SOURCE_FOLDER)]) + self.fail_count) < self.get_count:
-            return await self.download_item(item, retry + 1)
+        asyncio.create_task(self.reinsert_failed_items(process.stdout))
         return 0
-    
 
-    async def download_multiple(self, item, retry = 0):
+    async def download_multiple(self, item):
         item_list = [item]
         self.set_item_destination(item)
         qsize = self.queue.qsize()
         for _ in range(min(qsize, 50)):
             item_list.append(self.set_item_destination(await self.queue.get()))
-            print(f"[{self.id.upper()}] - Consuming one more item. Remaining: {self.queue.qsize()}")
+            print(f"[{self.id.upper()}] - Consuming one more item ({item_list[-1].item['id']}). Remaining: {self.queue.qsize()}")
             self.queue.task_done()
         cmd = ' '.join([f'+workshop_download_item 255710 {it.item["id"]}' for it in item_list])
-        print(f"[{self.id.upper()}] - Downloading {len(item_list)} items. | Retry? {retry > 0}")
+        print(f"[{self.id.upper()}] - Downloading {len(item_list)} items.")
         process = await asyncio.create_subprocess_shell(
             f".\steamcmd\steamcmd.exe +login {constants.USERNAME} {constants.PASSWORD} {cmd} +quit",
             stdin=PIPE, stdout=PIPE
         )
         await process.wait()
+        asyncio.create_task(self.reinsert_failed_items(process.stdout))
         return 0
