@@ -1,3 +1,6 @@
+## Example of constants.py file
+##
+## Change the contents below to match your case and move the file to src/util/constants.py
 USERNAME = '******'
 PASSWORD = '******'
 
